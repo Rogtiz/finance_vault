@@ -64,19 +64,48 @@ from ..services import token_storage, api_client
 # ...
 from ..keyboards import main_menu_keyboard # <-- ИМПОРТ
 
+# @dp.message_handler(commands=['list']) # Оставляем для совместимости
+# @dp.callback_query_handler(lambda c: c.data == 'cards_list') # <-- НОВЫЙ ХЕНДЛЕР
+# async def cmd_list(target: types.Message | types.CallbackQuery):
+#     # Универсализация для обработки и Message, и CallbackQuery
+#     message = target.message if isinstance(target, types.CallbackQuery) else target
+#     user_id = target.from_user.id
+
+#     token = await token_storage.check_auth(message)
+#     master_key = token_storage.get_master_key(user_id) 
+#     if not token or not master_key: 
+#         if isinstance(target, types.CallbackQuery): await target.answer()
+#         return
+    
+#     if isinstance(target, types.CallbackQuery):
+#         await target.answer()
+
+# --- НОВЫЙ ВХОД: ПРОВЕРКА АУТЕНТИФИКАЦИИ В ХЕНДЛЕРЕ ---
+async def check_and_get_auth(target: types.Message | types.CallbackQuery) -> tuple[str | None, str | None]:
+    user_id = target.from_user.id
+    token = token_storage.check_auth(user_id)
+    master_key = token_storage.get_master_key(user_id)
+
+    if not token:
+        if isinstance(target, types.CallbackQuery):
+            await target.answer(text="❌ Не авторизован. Используйте /login.", show_alert=True)
+            await target.message.reply("❌ Не авторизован. Используйте /login.")
+        else:
+            await target.reply('Not authenticated. Use /login')
+        return None, None
+    
+    return token, master_key
+
+
 @dp.message_handler(commands=['list']) # Оставляем для совместимости
 @dp.callback_query_handler(lambda c: c.data == 'cards_list') # <-- НОВЫЙ ХЕНДЛЕР
 async def cmd_list(target: types.Message | types.CallbackQuery):
-    # Универсализация для обработки и Message, и CallbackQuery
-    message = target.message if isinstance(target, types.CallbackQuery) else target
-    user_id = target.from_user.id
-
-    token = await token_storage.check_auth(message)
-    master_key = token_storage.get_master_key(user_id) 
-    if not token or not master_key: 
-        if isinstance(target, types.CallbackQuery): await target.answer()
-        return
     
+    token, master_key = await check_and_get_auth(target)
+    if not token: return # check_and_get_auth уже отправил ошибку
+
+    # Универсализация:
+    message = target.message if isinstance(target, types.CallbackQuery) else target
     if isinstance(target, types.CallbackQuery):
         await target.answer()
         
@@ -108,7 +137,11 @@ async def cmd_list(target: types.Message | types.CallbackQuery):
             except Exception:
                 lines.append(f"❌ ID: {c_raw['id']} | {c_raw.get('label') or 'Без метки'} | Ошибка дешифровки.")
 
-        await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
+        # await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
+        if isinstance(target, types.CallbackQuery):
+            await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
+        else:
+            await message.reply('\n'.join(lines), reply_markup=main_menu_keyboard())
     else:
         await message.edit_text(f'❌ Ошибка API: {status}', reply_markup=main_menu_keyboard())
 

@@ -27,20 +27,29 @@ from ..services import token_storage, api_client
 #         await message.reply(f'Error: {status} {data}')
 
 # ...
-from ..keyboards import main_menu_keyboard # <-- ИМПОРТ
+from ..keyboards import main_menu_keyboard
+from .cards import check_and_get_auth # <--- ИМПОРТИРУЕМ ИЗ КАРТ, ЕСЛИ ОНА ТАМ БЫЛА
 
 # ...
+# @dp.message_handler(commands=['list_subs']) # Оставляем для совместимости
+# @dp.callback_query_handler(lambda c: c.data == 'subs_list') # <-- НОВЫЙ ХЕНДЛЕР
+# async def cmd_list_subs(target: types.Message | types.CallbackQuery):
+#     message = target.message if isinstance(target, types.CallbackQuery) else target
+#     user_id = target.from_user.id
+    
+#     token = await token_storage.check_auth(message)
+#     if not token: 
+#         if isinstance(target, types.CallbackQuery): await target.answer()
+#         return
+
 @dp.message_handler(commands=['list_subs']) # Оставляем для совместимости
 @dp.callback_query_handler(lambda c: c.data == 'subs_list') # <-- НОВЫЙ ХЕНДЛЕР
 async def cmd_list_subs(target: types.Message | types.CallbackQuery):
+    
+    token, _ = await check_and_get_auth(target)
+    if not token: return
+    
     message = target.message if isinstance(target, types.CallbackQuery) else target
-    user_id = target.from_user.id
-    
-    token = await token_storage.check_auth(message)
-    if not token: 
-        if isinstance(target, types.CallbackQuery): await target.answer()
-        return
-    
     if isinstance(target, types.CallbackQuery):
         await target.answer()
         
@@ -70,7 +79,12 @@ async def cmd_list_subs(target: types.Message | types.CallbackQuery):
 
         lines.append(f"\n💵 Общий (USD/мес. ~): <b>{total_cost:.2f} USD</b>")
         
-        await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
+        # await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
+
+        if isinstance(target, types.CallbackQuery):
+            await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
+        else:
+            await message.reply('\n'.join(lines), reply_markup=main_menu_keyboard())
     else:
         await message.edit_text(f'❌ Ошибка API: {status}', reply_markup=main_menu_keyboard())
 
