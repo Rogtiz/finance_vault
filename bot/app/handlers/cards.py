@@ -62,7 +62,7 @@ from ..services import token_storage, api_client
 #         await message.reply(f'Error: {status} {data}')
 
 # ...
-from ..keyboards import main_menu_keyboard # <-- ИМПОРТ
+from ..keyboards import main_menu_keyboard, item_actions_keyboard # <-- ИМПОРТ
 
 # @dp.message_handler(commands=['list']) # Оставляем для совместимости
 # @dp.callback_query_handler(lambda c: c.data == 'cards_list') # <-- НОВЫЙ ХЕНДЛЕР
@@ -97,19 +97,64 @@ async def check_and_get_auth(target: types.Message | types.CallbackQuery) -> tup
     return token, master_key
 
 
-@dp.message_handler(commands=['list']) # Оставляем для совместимости
-@dp.callback_query_handler(lambda c: c.data == 'cards_list') # <-- НОВЫЙ ХЕНДЛЕР
-async def cmd_list(target: types.Message | types.CallbackQuery):
+# @dp.message_handler(commands=['list']) # Оставляем для совместимости
+# @dp.callback_query_handler(lambda c: c.data == 'cards_list') # <-- НОВЫЙ ХЕНДЛЕР
+# async def cmd_list(target: types.Message | types.CallbackQuery):
     
-    token, master_key = await check_and_get_auth(target)
-    if not token: return # check_and_get_auth уже отправил ошибку
+#     token, master_key = await check_and_get_auth(target)
+#     if not token: return # check_and_get_auth уже отправил ошибку
 
-    # Универсализация:
+#     # Универсализация:
+#     message = target.message if isinstance(target, types.CallbackQuery) else target
+#     if isinstance(target, types.CallbackQuery):
+#         await target.answer()
+        
+#     # ... (логика получения ключа и RAW данных)
+#     key = derive_key(master_key) 
+#     status, data_raw = await api_client.api_get_cards(token)
+    
+#     if status == 200:
+#         if not data_raw:
+#             await message.edit_text('💳 У вас пока нет сохраненных карт.', reply_markup=main_menu_keyboard())
+#             return
+            
+#         lines = ["💳 <b>СОХРАНЕННЫЕ КАРТЫ:</b>\n"]
+#         for c_raw in data_raw:
+#             try:
+#                 nonce = base64.b64decode(c_raw['nonce_b64'])
+#                 ct = base64.b64decode(c_raw['enc_data_b64'])
+#                 payload = decrypt_payload(key, nonce, ct)
+                
+#                 card_num = payload.get('card_number', '')
+#                 masked = '<code>' + ('*' * (len(card_num)-4) + card_num[-4:]) + '</code>' if len(card_num) > 4 else '<code>N/A</code>'
+#                 holder = payload.get('holder') or 'Нет данных'
+#                 exp = payload.get('exp') or 'N/A'
+                
+#                 lines.append(
+#                     f"🔸 ID: <b>{c_raw['id']}</b> | {c_raw.get('label') or 'Без метки'}\n"
+#                     f"   Счет: {masked} | Владелец: {holder} | Срок: {exp}\n"
+#                 )
+#             except Exception:
+#                 lines.append(f"❌ ID: {c_raw['id']} | {c_raw.get('label') or 'Без метки'} | Ошибка дешифровки.")
+
+#         # await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
+#         if isinstance(target, types.CallbackQuery):
+#             await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
+#         else:
+#             await message.reply('\n'.join(lines), reply_markup=main_menu_keyboard())
+#     else:
+#         await message.edit_text(f'❌ Ошибка API: {status}', reply_markup=main_menu_keyboard())
+
+@dp.message_handler(commands=['list'])
+@dp.callback_query_handler(lambda c: c.data == 'cards_list')
+async def cmd_list(target: types.Message | types.CallbackQuery):
+    token, master_key = await check_and_get_auth(target)
+    if not token: return
+
     message = target.message if isinstance(target, types.CallbackQuery) else target
     if isinstance(target, types.CallbackQuery):
         await target.answer()
-        
-    # ... (логика получения ключа и RAW данных)
+    
     key = derive_key(master_key) 
     status, data_raw = await api_client.api_get_cards(token)
     
@@ -118,7 +163,12 @@ async def cmd_list(target: types.Message | types.CallbackQuery):
             await message.edit_text('💳 У вас пока нет сохраненных карт.', reply_markup=main_menu_keyboard())
             return
             
-        lines = ["💳 <b>СОХРАНЕННЫЕ КАРТЫ:</b>\n"]
+        # Удаляем старое сообщение (если это callback), чтобы отправить новые
+        if isinstance(target, types.CallbackQuery):
+            await message.delete()
+
+        await message.reply("💳 <b>СПИСОК ВАШИХ КАРТ:</b>")
+        
         for c_raw in data_raw:
             try:
                 nonce = base64.b64decode(c_raw['nonce_b64'])
@@ -130,20 +180,28 @@ async def cmd_list(target: types.Message | types.CallbackQuery):
                 holder = payload.get('holder') or 'Нет данных'
                 exp = payload.get('exp') or 'N/A'
                 
-                lines.append(
+                card_text = (
                     f"🔸 ID: <b>{c_raw['id']}</b> | {c_raw.get('label') or 'Без метки'}\n"
-                    f"   Счет: {masked} | Владелец: {holder} | Срок: {exp}\n"
+                    f"   Счет: {masked} | Владелец: {holder} | Срок: {exp}"
                 )
+                
+                # Отправляем отдельное сообщение с кнопками действий
+                await message.answer(
+                    card_text,
+                    reply_markup=item_actions_keyboard('card', c_raw['id'])
+                )
+                
             except Exception:
-                lines.append(f"❌ ID: {c_raw['id']} | {c_raw.get('label') or 'Без метки'} | Ошибка дешифровки.")
+                await message.answer(
+                    f"❌ ID: <b>{c_raw['id']}</b> | {c_raw.get('label') or 'Без метки'}\n"
+                    f"   Ошибка дешифровки.",
+                    reply_markup=item_actions_keyboard('card', c_raw['id'])
+                )
 
-        # await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
-        if isinstance(target, types.CallbackQuery):
-            await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
-        else:
-            await message.reply('\n'.join(lines), reply_markup=main_menu_keyboard())
+        await message.answer("👆 Выберите действие для просмотра полной информации или удаления.", reply_markup=main_menu_keyboard())
+
     else:
-        await message.edit_text(f'❌ Ошибка API: {status}', reply_markup=main_menu_keyboard())
+        await message.reply(f'❌ Ошибка API: {status}', reply_markup=main_menu_keyboard())
 
 # --- Хендлер для начала добавления карты ---
 @dp.callback_query_handler(lambda c: c.data == 'cards_add')
@@ -258,3 +316,50 @@ async def state_notes(message: types.Message, state: FSMContext):
     else:
         await message.reply(f'Failed to add: {status} {data_response}')
     await state.finish()
+
+
+# ... (в конце файла)
+
+@dp.callback_query_handler(lambda c: c.data.startswith('view_card:'))
+async def view_card_callback(callback_query: types.CallbackQuery):
+    token, master_key = await check_and_get_auth(callback_query)
+    if not token: return
+    
+    await callback_query.answer()
+    
+    card_id = int(callback_query.data.split(':')[1])
+    message = callback_query.message
+    
+    # 1. Получаем ключ и RAW данные
+    key = derive_key(master_key) 
+    status, j = await api_client.api_get_cards_id(token, card_id) # Предположим, что api_client имеет функцию для получения по ID
+    
+    if status == 200:
+        try:
+            # 2. Дешифровка
+            nonce = base64.b64decode(j['nonce_b64'])
+            ct = base64.b64decode(j['enc_data_b64'])
+            payload = decrypt_payload(key, nonce, ct)
+            
+            # 3. Вывод полной информации
+            txt = (
+                f"🔒 <b>ПОЛНАЯ КАРТА ID: {card_id}</b>\n"
+                f"----------------------------------------\n"
+                f"Метка: <b>{j.get('label') or 'Без метки'}</b>\n"
+                f"Номер: <code>{payload.get('card_number')}</code>\n"
+                f"Владелец: {payload.get('holder') or 'N/A'}\n"
+                f"Срок: {payload.get('exp') or 'N/A'}\n"
+                f"CVV: <code>{payload.get('cvv') or 'N/A'}</code>\n"
+                f"Заметки:\n{payload.get('notes') or 'Нет'}"
+            )
+            
+            await message.edit_text(txt, reply_markup=item_actions_keyboard('card', card_id))
+            
+        except Exception as e:
+            await message.edit_text(
+                f"❌ ID: {card_id}. Ошибка дешифровки.\n"
+                f"Убедитесь, что вы используете правильный мастер-ключ.",
+                reply_markup=item_actions_keyboard('card', card_id)
+            )
+    else:
+        await message.edit_text(f"❌ Ошибка: Карта ID {card_id} не найдена или ошибка API.", reply_markup=main_menu_keyboard())

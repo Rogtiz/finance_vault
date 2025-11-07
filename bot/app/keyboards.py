@@ -16,3 +16,25 @@ def main_menu_keyboard() -> InlineKeyboardMarkup:
     kb.add(InlineKeyboardButton("🚪 Выход / Logout", callback_data="logout"))
     
     return kb
+
+def item_actions_keyboard(item_type: str, item_id: int) -> InlineKeyboardMarkup:
+    """
+    Генерирует инлайн-клавиатуру действий для конкретного элемента.
+    item_type: 'card' или 'sub'
+    item_id: ID элемента в БД
+    """
+    kb = InlineKeyboardMarkup(row_width=2)
+    
+    if item_type == 'card':
+        kb.add(InlineKeyboardButton("👁️ Просмотр полной карты", callback_data=f"view_card:{item_id}"))
+        # kb.add(InlineKeyboardButton("✏️ Изменить", callback_data=f"edit_card:{item_id}")) # Можно добавить позже
+        kb.add(InlineKeyboardButton("🗑️ Удалить", callback_data=f"del_card:{item_id}"))
+    
+    elif item_type == 'sub':
+        kb.add(InlineKeyboardButton("👁️ Просмотр деталей", callback_data=f"view_sub:{item_id}"))
+        # kb.add(InlineKeyboardButton("✏️ Изменить", callback_data=f"edit_sub:{item_id}")) # Можно добавить позже
+        kb.add(InlineKeyboardButton("🗑️ Удалить", callback_data=f"del_sub_id:{item_id}")) # Избегаем конфликта с командой /del_sub
+
+    kb.add(InlineKeyboardButton("🔙 Назад в меню", callback_data="menu"))
+    
+    return kb

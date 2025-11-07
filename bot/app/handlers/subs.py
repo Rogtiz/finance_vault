@@ -27,7 +27,7 @@ from ..services import token_storage, api_client
 #         await message.reply(f'Error: {status} {data}')
 
 # ...
-from ..keyboards import main_menu_keyboard
+from ..keyboards import main_menu_keyboard, item_actions_keyboard
 from .cards import check_and_get_auth # <--- ИМПОРТИРУЕМ ИЗ КАРТ, ЕСЛИ ОНА ТАМ БЫЛА
 
 # ...
@@ -42,17 +42,63 @@ from .cards import check_and_get_auth # <--- ИМПОРТИРУЕМ ИЗ КАР�
 #         if isinstance(target, types.CallbackQuery): await target.answer()
 #         return
 
-@dp.message_handler(commands=['list_subs']) # Оставляем для совместимости
-@dp.callback_query_handler(lambda c: c.data == 'subs_list') # <-- НОВЫЙ ХЕНДЛЕР
-async def cmd_list_subs(target: types.Message | types.CallbackQuery):
+# @dp.message_handler(commands=['list_subs']) # Оставляем для совместимости
+# @dp.callback_query_handler(lambda c: c.data == 'subs_list') # <-- НОВЫЙ ХЕНДЛЕР
+# async def cmd_list_subs(target: types.Message | types.CallbackQuery):
     
+#     token, _ = await check_and_get_auth(target)
+#     if not token: return
+    
+#     message = target.message if isinstance(target, types.CallbackQuery) else target
+#     if isinstance(target, types.CallbackQuery):
+#         await target.answer()
+        
+#     status, data = await api_client.api_get_subs(token)
+    
+#     if status == 200:
+#         if not data:
+#             await message.edit_text('🔄 У вас пока нет активных подписок.', reply_markup=main_menu_keyboard())
+#             return
+            
+#         lines = ["🔄 <b>ВАШИ ПОДПИСКИ:</b>\n"]
+#         total_cost = 0
+        
+#         for s in data:
+#             cost = s['cost']
+#             currency = s['currency']
+#             cycle = s['billing_cycle']
+#             next_date = s.get('next_billing_date') or 'N/A'
+            
+#             lines.append(
+#                 f"🌟 ID: <b>{s['id']}</b> | <b>{s['service_name']}</b>\n"
+#                 f"   Стоимость: <code>{cost:.2f} {currency}</code> ({cycle})\n"
+#                 f"   След. списание: <code>{next_date}</code>\n"
+#             )
+#             if currency == 'USD' and cycle.lower() == 'monthly':
+#                 total_cost += cost # Простой подсчет только для USD/monthly
+
+#         lines.append(f"\n💵 Общий (USD/мес. ~): <b>{total_cost:.2f} USD</b>")
+        
+#         # await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
+
+#         if isinstance(target, types.CallbackQuery):
+#             await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
+#         else:
+#             await message.reply('\n'.join(lines), reply_markup=main_menu_keyboard())
+#     else:
+#         await message.edit_text(f'❌ Ошибка API: {status}', reply_markup=main_menu_keyboard())
+
+
+@dp.message_handler(commands=['list_subs'])
+@dp.callback_query_handler(lambda c: c.data == 'subs_list') 
+async def cmd_list_subs(target: types.Message | types.CallbackQuery):
     token, _ = await check_and_get_auth(target)
     if not token: return
     
     message = target.message if isinstance(target, types.CallbackQuery) else target
     if isinstance(target, types.CallbackQuery):
         await target.answer()
-        
+
     status, data = await api_client.api_get_subs(token)
     
     if status == 200:
@@ -60,8 +106,10 @@ async def cmd_list_subs(target: types.Message | types.CallbackQuery):
             await message.edit_text('🔄 У вас пока нет активных подписок.', reply_markup=main_menu_keyboard())
             return
             
-        lines = ["🔄 <b>ВАШИ ПОДПИСКИ:</b>\n"]
-        total_cost = 0
+        if isinstance(target, types.CallbackQuery):
+            await message.delete()
+
+        await message.reply("🔄 <b>СПИСОК ВАШИХ ПОДПИСОК:</b>")
         
         for s in data:
             cost = s['cost']
@@ -69,24 +117,21 @@ async def cmd_list_subs(target: types.Message | types.CallbackQuery):
             cycle = s['billing_cycle']
             next_date = s.get('next_billing_date') or 'N/A'
             
-            lines.append(
+            sub_text = (
                 f"🌟 ID: <b>{s['id']}</b> | <b>{s['service_name']}</b>\n"
                 f"   Стоимость: <code>{cost:.2f} {currency}</code> ({cycle})\n"
-                f"   След. списание: <code>{next_date}</code>\n"
+                f"   След. списание: <code>{next_date}</code>"
             )
-            if currency == 'USD' and cycle.lower() == 'monthly':
-                total_cost += cost # Простой подсчет только для USD/monthly
+            
+            await message.answer(
+                sub_text,
+                reply_markup=item_actions_keyboard('sub', s['id'])
+            )
 
-        lines.append(f"\n💵 Общий (USD/мес. ~): <b>{total_cost:.2f} USD</b>")
-        
-        # await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
+        await message.answer("👆 Выберите действие для просмотра деталей или удаления.", reply_markup=main_menu_keyboard())
 
-        if isinstance(target, types.CallbackQuery):
-            await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
-        else:
-            await message.reply('\n'.join(lines), reply_markup=main_menu_keyboard())
     else:
-        await message.edit_text(f'❌ Ошибка API: {status}', reply_markup=main_menu_keyboard())
+        await message.reply(f'❌ Ошибка API: {status}', reply_markup=main_menu_keyboard())
 
 
 # --- Хендлер для начала добавления подписки ---
@@ -194,3 +239,34 @@ async def sub_state_notes(message: types.Message, state: FSMContext):
     else:
         await message.reply(f'Failed to add: {status} {data}')
     await state.finish()
+
+# ... (в конце файла)
+
+@dp.callback_query_handler(lambda c: c.data.startswith('view_sub:'))
+async def view_sub_callback(callback_query: types.CallbackQuery):
+    token, _ = await check_and_get_auth(callback_query)
+    if not token: return
+    
+    await callback_query.answer()
+    
+    sub_id = int(callback_query.data.split(':')[1])
+    message = callback_query.message
+    
+    status, s = await api_client.api_get_subs_id(token, sub_id)
+    
+    if status == 200:
+        txt = (
+            f"📑 <b>ДЕТАЛИ ПОДПИСКИ ID: {sub_id}</b>\n"
+            f"----------------------------------------\n"
+            f"Сервис: <b>{s.get('service_name')}</b>\n"
+            f"Сумма: <code>{s.get('cost'):.2f} {s.get('currency')}</code>\n"
+            f"Цикл: {s.get('billing_cycle')}\n"
+            f"След. списание: <b>{s.get('next_billing_date') or 'N/A'}</b>\n"
+            f"Дата начала: {s.get('start_date') or 'N/A'}\n"
+            f"Заметки:\n{s.get('notes') or 'Нет'}"
+        )
+        
+        await message.edit_text(txt, reply_markup=item_actions_keyboard('sub', sub_id))
+    
+    else:
+        await message.edit_text(f"❌ Ошибка: Подписка ID {sub_id} не найдена или ошибка API.", reply_markup=main_menu_keyboard())
