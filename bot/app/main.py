@@ -1,6 +1,5 @@
-import asyncio
-import logging
-from .bot import dp, bot
+from aiogram import executor
+from .bot import dp
 
 # Импортируем handlers, чтобы они зарегистрировались в Dispatcher
 from . import handlers 
@@ -11,12 +10,10 @@ async def on_startup(dispatcher):
 async def on_shutdown(dispatcher):
     print("Bot shutting down...")
 
-async def main():
-    logging.info("Bot starting polling...")
-    await dp.start_polling(bot, skip_updates=True)
-
 if __name__ == '__main__':
-    try:
-        asyncio.run(main())
-    except (KeyboardInterrupt, SystemExit):
-        logging.info("Bot shutting down...")
+    executor.start_polling(
+        dp, 
+        skip_updates=True,
+        on_startup=on_startup,
+        on_shutdown=on_shutdown
+    )
