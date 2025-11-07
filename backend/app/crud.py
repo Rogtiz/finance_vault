@@ -22,26 +22,26 @@ def create_user(db: Session, user: schemas.UserCreate):
     return db_user
 
 # --- Card ---
-def create_user_card(db: Session, card: schemas.CardCreate, user: models.User):
-    key = crypto.user_key_from_user(user)
-    payload = {
-        "card_number": card.card_number,
-        "holder": card.holder,
-        "exp": card.exp,
-        "cvv": card.cvv,
-        "notes": card.notes
-    }
-    nonce, ct = crypto.encrypt_payload(key, payload)
-    db_card = models.Card(
-        owner_id=user.id,
-        label=card.label,
-        enc_data=ct,
-        nonce=nonce
-    )
-    db.add(db_card)
-    db.commit()
-    db.refresh(db_card)
-    return db_card
+# def create_user_card(db: Session, card: schemas.CardCreate, user: models.User):
+#     key = crypto.user_key_from_user(user)
+#     payload = {
+#         "card_number": card.card_number,
+#         "holder": card.holder,
+#         "exp": card.exp,
+#         "cvv": card.cvv,
+#         "notes": card.notes
+#     }
+#     nonce, ct = crypto.encrypt_payload(key, payload)
+#     db_card = models.Card(
+#         owner_id=user.id,
+#         label=card.label,
+#         enc_data=ct,
+#         nonce=nonce
+#     )
+#     db.add(db_card)
+#     db.commit()
+#     db.refresh(db_card)
+#     return db_card
 
 def get_user_cards(db: Session, user_id: int):
     return db.query(models.Card).filter(models.Card.owner_id == user_id).all()
@@ -58,7 +58,7 @@ def delete_user_card(db: Session, card_id: int, user_id: int):
     return db_card
 
 # --- Card Raw ---
-def create_raw_card(db: Session, raw: schemas.RawCardIn, user_id: int):
+def create_user_card(db: Session, raw: schemas.RawCardIn, user_id: int):
     ct = base64.b64decode(raw.enc_data_b64)
     nonce = base64.b64decode(raw.nonce_b64)
     db_card = models.Card(

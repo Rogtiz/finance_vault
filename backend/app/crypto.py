@@ -46,6 +46,6 @@ def mask_card_number(num: str):
     if len(n) <= 4: return '*' * max(1, len(n))
     return ('*' * (len(n)-4)) + n[-4:]
 
-def user_key_from_user(user: models.User) -> bytes:
-    # WARNING: Simplification. See original notes.
-    return derive_key(user.password_verifier.hex(), user.password_salt)
+# def user_key_from_user(user: models.User) -> bytes:
+#     # WARNING: Simplification. See original notes.
+#     return derive_key(user.password_verifier.hex(), user.password_salt)

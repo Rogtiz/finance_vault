@@ -36,6 +36,17 @@ async def cmd_cancel(message: types.Message, state: FSMContext):
     await state.finish()
     await message.reply('Cancelled.')
 
+# @dp.message_handler(lambda m: m.text and ' ' in m.text and not m.text.startswith('/'), state='*')
+# async def handle_credentials(message: types.Message):
+#     parts = message.text.strip().split(None, 1)
+#     if len(parts) != 2: return
+    
+#     username, password = parts
+#     status, data = await api_client.api_login(username, password)
+    
+#     if status == 200:
+#         token_storage.set_token(message.from_user.id, data.get('access_token'))
+#         await message.reply('Logged in successfully.')
 @dp.message_handler(lambda m: m.text and ' ' in m.text and not m.text.startswith('/'), state='*')
 async def handle_credentials(message: types.Message):
     parts = message.text.strip().split(None, 1)
@@ -45,7 +56,9 @@ async def handle_credentials(message: types.Message):
     status, data = await api_client.api_login(username, password)
     
     if status == 200:
-        token_storage.set_token(message.from_user.id, data.get('access_token'))
+        # Сохраняем и токен, и пароль (как мастер-ключ)
+        token_storage.set_credentials(message.from_user.id, data.get('access_token'), password) 
         await message.reply('Logged in successfully.')
+    # ...
     else:
         await message.reply(f'Login failed: {status} {data}')

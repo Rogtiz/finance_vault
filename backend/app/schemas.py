@@ -12,34 +12,34 @@ class UserCreate(BaseModel):
     username: str
     password: str
 
-# --- Card ---
-class CardCreate(BaseModel):
-    label: Optional[str] = None
-    card_number: str
-    holder: Optional[str] = None
-    exp: Optional[str] = None
-    cvv: Optional[str] = None
-    notes: Optional[str] = None
+# # --- Card ---
+# class CardCreate(BaseModel):
+#     label: Optional[str] = None
+#     card_number: str
+#     holder: Optional[str] = None
+#     exp: Optional[str] = None
+#     cvv: Optional[str] = None
+#     notes: Optional[str] = None
 
-class CardOut(BaseModel):
-    id: int
-    label: Optional[str]
-    masked: str
-    holder: Optional[str]
-    exp: Optional[str]
-    created_at: datetime
-    class Config: orm_mode = True
+# class CardOut(BaseModel):
+#     id: int
+#     label: Optional[str]
+#     masked: str
+#     holder: Optional[str]
+#     exp: Optional[str]
+#     created_at: datetime
+#     class Config: orm_mode = True
 
-class CardFull(BaseModel):
-    id: int
-    label: Optional[str]
-    card_number: str
-    holder: Optional[str]
-    exp: Optional[str]
-    cvv: Optional[str]
-    notes: Optional[str]
-    created_at: datetime
-    class Config: orm_mode = True
+# class CardFull(BaseModel):
+#     id: int
+#     label: Optional[str]
+#     card_number: str
+#     holder: Optional[str]
+#     exp: Optional[str]
+#     cvv: Optional[str]
+#     notes: Optional[str]
+#     created_at: datetime
+#     class Config: orm_mode = True
 
 # --- Card Raw ---
 class RawCardIn(BaseModel):
