@@ -61,42 +61,67 @@ from ..services import token_storage, api_client
 #     else:
 #         await message.reply(f'Error: {status} {data}')
 
-@dp.message_handler(commands=['list'])
-async def cmd_list(message: types.Message):
+# ...
+from ..keyboards import main_menu_keyboard # <-- ИМПОРТ
+
+@dp.message_handler(commands=['list']) # Оставляем для совместимости
+@dp.callback_query_handler(lambda c: c.data == 'cards_list') # <-- НОВЫЙ ХЕНДЛЕР
+async def cmd_list(target: types.Message | types.CallbackQuery):
+    # Универсализация для обработки и Message, и CallbackQuery
+    message = target.message if isinstance(target, types.CallbackQuery) else target
+    user_id = target.from_user.id
+
     token = await token_storage.check_auth(message)
-    master_key = token_storage.get_master_key(message.from_user.id) # <-- Новый ключ
-    if not token or not master_key: return
+    master_key = token_storage.get_master_key(user_id) 
+    if not token or not master_key: 
+        if isinstance(target, types.CallbackQuery): await target.answer()
+        return
     
-    # 1. Получаем ключ для дешифровки
+    if isinstance(target, types.CallbackQuery):
+        await target.answer()
+        
+    # ... (логика получения ключа и RAW данных)
     key = derive_key(master_key) 
-    
-    # 2. Получаем RAW данные из API (эндпоинт /cards теперь возвращает RAW)
     status, data_raw = await api_client.api_get_cards(token)
     
     if status == 200:
         if not data_raw:
-            await message.reply('No cards.')
+            await message.edit_text('💳 У вас пока нет сохраненных карт.', reply_markup=main_menu_keyboard())
             return
-        lines = ["💳 <b>Your Cards:</b>"]
+            
+        lines = ["💳 <b>СОХРАНЕННЫЕ КАРТЫ:</b>\n"]
         for c_raw in data_raw:
             try:
                 nonce = base64.b64decode(c_raw['nonce_b64'])
                 ct = base64.b64decode(c_raw['enc_data_b64'])
-                payload = decrypt_payload(key, nonce, ct) # <-- Дешифровка здесь
+                payload = decrypt_payload(key, nonce, ct)
                 
-                # Формируем отображаемую информацию
                 card_num = payload.get('card_number', '')
-                masked = '******' + card_num[-4:] if len(card_num) > 4 else card_num
-                holder = payload.get('holder') or ''
-                exp = payload.get('exp') or ''
+                masked = '<code>' + ('*' * (len(card_num)-4) + card_num[-4:]) + '</code>' if len(card_num) > 4 else '<code>N/A</code>'
+                holder = payload.get('holder') or 'Нет данных'
+                exp = payload.get('exp') or 'N/A'
                 
-                lines.append(f"ID: {c_raw['id']} | {c_raw.get('label') or ''} | {masked} | {holder} | {exp}")
+                lines.append(
+                    f"🔸 ID: <b>{c_raw['id']}</b> | {c_raw.get('label') or 'Без метки'}\n"
+                    f"   Счет: {masked} | Владелец: {holder} | Срок: {exp}\n"
+                )
             except Exception:
-                lines.append(f"ID: {c_raw['id']} | {c_raw.get('label') or ''} | (Decryption Error)")
+                lines.append(f"❌ ID: {c_raw['id']} | {c_raw.get('label') or 'Без метки'} | Ошибка дешифровки.")
 
-        await message.reply('\n'.join(lines))
+        await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
     else:
-        await message.reply(f'Error: {status} {data_raw}')
+        await message.edit_text(f'❌ Ошибка API: {status}', reply_markup=main_menu_keyboard())
+
+# --- Хендлер для начала добавления карты ---
+@dp.callback_query_handler(lambda c: c.data == 'cards_add')
+async def start_add_card_callback(callback_query: types.CallbackQuery):
+    if not await token_storage.check_auth(callback_query.message): 
+        await callback_query.answer()
+        return
+        
+    await callback_query.answer()
+    await callback_query.message.reply('📝 Добавление карты. Введите метку/название (или /cancel)')
+    await AddCardStates.label.set()
 
 @dp.message_handler(commands=['add'])
 async def cmd_add(message: types.Message):

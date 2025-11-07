@@ -6,25 +6,85 @@ from ..bot import dp
 from ..states import AddSubStates
 from ..services import token_storage, api_client
 
-@dp.message_handler(commands=['list_subs'])
-async def cmd_list_subs(message: types.Message):
-    token = await token_storage.check_auth(message)
-    if not token: return
+# @dp.message_handler(commands=['list_subs'])
+# async def cmd_list_subs(message: types.Message):
+#     token = await token_storage.check_auth(message)
+#     if not token: return
     
+#     status, data = await api_client.api_get_subs(token)
+#     if status == 200:
+#         if not data:
+#             await message.reply('No subscriptions.')
+#             return
+#         lines = ["🔄 <b>Your Subscriptions:</b>"]
+#         for s in data:
+#             cost_str = f"{s['cost']} {s['currency']}"
+#             cycle_str = s['billing_cycle']
+#             date_str = s.get('next_billing_date') or s.get('start_date') or ''
+#             lines.append(f"ID: {s['id']} | <b>{s['service_name']}</b> | {cost_str} ({cycle_str}) | Next: {date_str}")
+#         await message.reply('\n'.join(lines))
+#     else:
+#         await message.reply(f'Error: {status} {data}')
+
+# ...
+from ..keyboards import main_menu_keyboard # <-- ИМПОРТ
+
+# ...
+@dp.message_handler(commands=['list_subs']) # Оставляем для совместимости
+@dp.callback_query_handler(lambda c: c.data == 'subs_list') # <-- НОВЫЙ ХЕНДЛЕР
+async def cmd_list_subs(target: types.Message | types.CallbackQuery):
+    message = target.message if isinstance(target, types.CallbackQuery) else target
+    user_id = target.from_user.id
+    
+    token = await token_storage.check_auth(message)
+    if not token: 
+        if isinstance(target, types.CallbackQuery): await target.answer()
+        return
+    
+    if isinstance(target, types.CallbackQuery):
+        await target.answer()
+        
     status, data = await api_client.api_get_subs(token)
+    
     if status == 200:
         if not data:
-            await message.reply('No subscriptions.')
+            await message.edit_text('🔄 У вас пока нет активных подписок.', reply_markup=main_menu_keyboard())
             return
-        lines = ["🔄 <b>Your Subscriptions:</b>"]
+            
+        lines = ["🔄 <b>ВАШИ ПОДПИСКИ:</b>\n"]
+        total_cost = 0
+        
         for s in data:
-            cost_str = f"{s['cost']} {s['currency']}"
-            cycle_str = s['billing_cycle']
-            date_str = s.get('next_billing_date') or s.get('start_date') or ''
-            lines.append(f"ID: {s['id']} | <b>{s['service_name']}</b> | {cost_str} ({cycle_str}) | Next: {date_str}")
-        await message.reply('\n'.join(lines))
+            cost = s['cost']
+            currency = s['currency']
+            cycle = s['billing_cycle']
+            next_date = s.get('next_billing_date') or 'N/A'
+            
+            lines.append(
+                f"🌟 ID: <b>{s['id']}</b> | <b>{s['service_name']}</b>\n"
+                f"   Стоимость: <code>{cost:.2f} {currency}</code> ({cycle})\n"
+                f"   След. списание: <code>{next_date}</code>\n"
+            )
+            if currency == 'USD' and cycle.lower() == 'monthly':
+                total_cost += cost # Простой подсчет только для USD/monthly
+
+        lines.append(f"\n💵 Общий (USD/мес. ~): <b>{total_cost:.2f} USD</b>")
+        
+        await message.edit_text('\n'.join(lines), reply_markup=main_menu_keyboard())
     else:
-        await message.reply(f'Error: {status} {data}')
+        await message.edit_text(f'❌ Ошибка API: {status}', reply_markup=main_menu_keyboard())
+
+
+# --- Хендлер для начала добавления подписки ---
+@dp.callback_query_handler(lambda c: c.data == 'subs_add')
+async def start_add_sub_callback(callback_query: types.CallbackQuery):
+    if not await token_storage.check_auth(callback_query.message): 
+        await callback_query.answer()
+        return
+        
+    await callback_query.answer()
+    await callback_query.message.reply('📝 Добавление подписки. Введите название сервиса (или /cancel)')
+    await AddSubStates.service_name.set()
 
 @dp.message_handler(Command('del_sub'))
 async def cmd_del_sub(message: types.Message):
