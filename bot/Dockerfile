@@ -7,4 +7,5 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY ./app /app/app
 
 # Запускаем бота, указывая на app/main.py
-CMD ["python", "app/main.py"]
+# CMD ["python", "app/main.py"]
+CMD ["python", "-m", "app.main"]
