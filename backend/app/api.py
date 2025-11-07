@@ -200,7 +200,7 @@ def delete_card(card_id: int,
 #         enc_data_b64=base64.b64encode(c.enc_data).decode('ascii'), 
 #         nonce_b64=base64.b64encode(c.nonce).decode('ascii'), 
 #         created_at=c.created_at
-    )
+#    )
 
 # --- Subscription Endpoints ---
 
